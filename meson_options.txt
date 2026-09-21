@@ -58,3 +58,8 @@ option('gtk-layer-shell',
     value: 'auto',
     description: 'Use gtk-layer-shell to allow correct popup and event handling under Wayland.'
 )
+option('kbd-layout-controller',
+    type: 'feature',
+    value: 'auto',
+    description: 'Build XAppKbdLayoutController (requires libgnomekbd).'
+)

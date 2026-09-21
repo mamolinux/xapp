@@ -111,10 +111,29 @@ switcheroo_sources = gnome.gdbus_codegen(
 
 xapp_sources += switcheroo_sources
 
-if not app_lib_only
-    libdeps += dependency('libgnomekbdui', required: true)
+kbd_layout_opt = get_option('kbd-layout-controller')
+
+if app_lib_only and kbd_layout_opt.enabled()
+    error('kbd-layout-controller cannot be enabled together with app-lib-only')
+endif
+
+if app_lib_only
+    have_kbd_layout_controller = false
+else
+    gnomekbd_dep = dependency('libgnomekbdui', required: kbd_layout_opt)
+    have_kbd_layout_controller = gnomekbd_dep.found()
+endif
+
+# Headers present in the source tree but left out of this build, so gtk-doc
+# doesn't try to document types the library doesn't export.
+xapp_unbuilt_headers = []
+
+if have_kbd_layout_controller
+    libdeps += gnomekbd_dep
     xapp_headers += 'xapp-kbd-layout-controller.h'
     xapp_sources += 'xapp-kbd-layout-controller.c'
+else
+    xapp_unbuilt_headers += 'xapp-kbd-layout-controller.h'
 endif
 
 xapp_statusicon_interface_sources = gnome.gdbus_codegen(
@@ -179,7 +198,6 @@ pkg.generate(
     description: 'Utility library',
     version: meson.project_version(),
     requires: ['gtk+-3.0', 'gobject-2.0', 'cairo'],
-    requires_private: 'xkbfile',
 )
 
 install_data(['xapp-glade-catalog.xml'],
