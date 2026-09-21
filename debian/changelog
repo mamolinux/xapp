@@ -1,3 +1,10 @@
+xapp (3.3.6) adrien; urgency=medium
+
+  [ Michael Webster ]
+  * build (meson): Make libgnomekbd an optional dependency.
+
+ -- Clement Lefebvre <root@linuxmint.com>  Mon, 21 Sep 2026 18:33:33 +0100
+
 xapp (3.3.5) alfa; urgency=medium
 
   [ Michael Webster ]
