@@ -2,7 +2,9 @@
 
 import argparse
 import os
+import signal
 import sys
+import tempfile
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -32,6 +34,11 @@ Flags exercise the places hosts and clients disagree:
                           multiplexer did. Pins the watcher to addressing items
                           by the name they registered with
   --icon-name             send IconName instead of IconPixmap
+  --symbolic-theme-path   send a *-symbolic IconName that exists only under
+                          IconThemePath, the way AppImages like Cryptomator do.
+                          xapp-sn-watcher can't find it in the system theme, so
+                          it forwards the resolved absolute path to the applet,
+                          which has to recolor it like any other symbolic
 """
 
 ITEM_PATH = "/StatusNotifierItem"
@@ -53,6 +60,7 @@ SNI_XML = """
     <property name='WindowId' type='i' access='read'/>
     <property name='IconName' type='s' access='read'/>
     <property name='IconPixmap' type='a(iiay)' access='read'/>
+    <property name='IconThemePath' type='s' access='read'/>
     <property name='AttentionIconName' type='s' access='read'/>
     <property name='OverlayIconName' type='s' access='read'/>
     <property name='ToolTip' type='(sa(iiay)ss)' access='read'/>
@@ -82,6 +90,13 @@ SNI_XML = """
     </signal>
   </interface>
 </node>
+"""
+
+THEME_PATH_ICON_NAME = "fdo-sni-test-tray-symbolic"
+
+THEME_PATH_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="#bebebe" d="M8 1 1 8l7 7 7-7zm0 3 4 4-4 4-4-4z"/>
+</svg>
 """
 
 MENU_XML = """
@@ -192,6 +207,13 @@ class Item:
         self.conn = None
         self.window = None
         self.attention = False
+        self.icon_theme_dir = None
+
+        if args.symbolic_theme_path:
+            self.icon_theme_dir = tempfile.TemporaryDirectory(prefix="fdo-sni-icons-")
+            with open(os.path.join(self.icon_theme_dir.name, THEME_PATH_ICON_NAME + ".svg"), "w") as f:
+                f.write(THEME_PATH_ICON_SVG)
+            print("IconThemePath is %s" % self.icon_theme_dir.name)
 
         if args.kde_only:
             self.ifaces = [KDE_IFACE]
@@ -277,11 +299,15 @@ class Item:
         if prop == "WindowId":
             return GLib.Variant("i", 0)
         if prop == "IconName":
+            if self.icon_theme_dir:
+                return GLib.Variant("s", THEME_PATH_ICON_NAME)
             return GLib.Variant("s", "dialog-information" if self.args.icon_name else "")
         if prop == "IconPixmap":
-            if self.args.icon_name:
+            if self.args.icon_name or self.icon_theme_dir:
                 return GLib.Variant("a(iiay)", [])
             return GLib.Variant("a(iiay)", argb_pixmap("dialog-information", 22))
+        if prop == "IconThemePath":
+            return GLib.Variant("s", self.icon_theme_dir.name if self.icon_theme_dir else "")
         if prop == "AttentionIconName":
             return GLib.Variant("s", "dialog-warning")
         if prop == "OverlayIconName":
@@ -428,6 +454,7 @@ def main():
     parser.add_argument("--fdo-only", action="store_true")
     parser.add_argument("--registered-name-only", action="store_true")
     parser.add_argument("--icon-name", action="store_true")
+    parser.add_argument("--symbolic-theme-path", action="store_true")
     args = parser.parse_args()
 
     if args.kde_only and args.fdo_only:
@@ -435,8 +462,11 @@ def main():
 
     Item(args)
 
+    loop = GLib.MainLoop()
+    signal.signal(signal.SIGTERM, lambda signum, frame: loop.quit())
+
     try:
-        GLib.MainLoop().run()
+        loop.run()
     except KeyboardInterrupt:
         pass
     sys.exit(0)
